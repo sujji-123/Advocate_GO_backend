@@ -26,20 +26,31 @@ const io = new Server(server, {
 });
 
 const corsOptions = {
-    origin: process.env.CLIENT_URL,
-    credentials: true,
+  origin: process.env.CLIENT_URL,
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
+// --- FIX 1: Start server *after* successful MongoDB connection ---
 mongoose.connect(process.env.MONGO_URL)
-    .then(() => {
-      console.log('Connected to MongoDB');
-    })
-    .catch(console.error);
+  .then(() => {
+    console.log('Connected to MongoDB');
 
+    // Start server only after successful DB connection to avoid buffering timeouts
+    const PORT = process.env.PORT || 8000;
+    server.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to connect to MongoDB:', err);
+    process.exit(1);
+  });
+
+// --- API Routes ---
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/connections', connectionRoutes);
@@ -50,8 +61,8 @@ app.use('/api/chat', chatRoutes);
 const userSockets = {};
 
 const getConversationId = (userId1, userId2) => {
-    // Ensure consistent order for conversation ID
-    return [String(userId1), String(userId2)].sort().join('_');
+  // Ensure consistent order for conversation ID
+  return [String(userId1), String(userId2)].sort().join('_');
 };
 
 io.on('connection', (socket) => {
@@ -62,29 +73,28 @@ io.on('connection', (socket) => {
       userSockets[userId] = socket.id;
       console.log(`User ${userId} registered with socket ${socket.id}`); // DEBUG
     } else {
-        console.warn(`Attempted to register user with invalid ID from socket ${socket.id}`);
+      console.warn(`Attempted to register user with invalid ID from socket ${socket.id}`);
     }
   });
 
   socket.on('joinChat', (otherUserId, selfId) => {
-      if (!selfId || !otherUserId) {
-          console.warn(`Invalid IDs for joinChat: selfId=${selfId}, otherUserId=${otherUserId}`); // DEBUG
-          return;
-      }
-      const conversationId = getConversationId(selfId, otherUserId);
-      socket.join(conversationId);
-      console.log(`Socket ${socket.id} (User ${selfId}) joined room: ${conversationId}`); // DEBUG
+    if (!selfId || !otherUserId) {
+      console.warn(`Invalid IDs for joinChat: selfId=${selfId}, otherUserId=${otherUserId}`); // DEBUG
+      return;
+    }
+    const conversationId = getConversationId(selfId, otherUserId);
+    socket.join(conversationId);
+    console.log(`Socket ${socket.id} (User ${selfId}) joined room: ${conversationId}`); // DEBUG
   });
 
   socket.on('sendMessage', async (data) => {
-    // --- DEBUG ---
-    console.log("Received 'sendMessage' event with data:", data);
-    // --- END DEBUG ---
+    console.log("Received 'sendMessage' event with data:", data); // DEBUG
+
     const { senderId, recipientId, content, tempClientOriginId } = data;
     if (!senderId || !recipientId || !content) {
-        console.error("Missing data in sendMessage event:", data); // DEBUG
-        socket.emit('messageError', { message: "Missing sender, recipient, or content." });
-        return;
+      console.error("Missing data in sendMessage event:", data); // DEBUG
+      socket.emit('messageError', { message: "Missing sender, recipient, or content." });
+      return;
     }
 
     const conversationId = getConversationId(senderId, recipientId);
@@ -97,28 +107,25 @@ io.on('connection', (socket) => {
         recipient: recipientId,
         content,
       });
-      const savedMessage = await newMessage.save(); // Get the saved message with _id and timestamps
+      const savedMessage = await newMessage.save(); // includes _id, timestamps
       console.log("Message saved to DB:", savedMessage); // DEBUG
 
-      // Populate sender info before emitting (optional but good for frontend)
       await savedMessage.populate('sender', 'name');
 
-      // Include tempClientOriginId in the response for optimistic update matching
       const messageToSend = {
         ...savedMessage.toObject(),
         tempClientOriginId: tempClientOriginId || null
       };
 
       console.log(`Emitting 'receiveMessage' to room ${conversationId} with message:`, messageToSend); // DEBUG
-      io.to(conversationId).emit('receiveMessage', messageToSend); // Send the *saved* message
-
+      io.to(conversationId).emit('receiveMessage', messageToSend);
     } catch (error) {
       console.error("Error saving/sending message:", error); // DEBUG
       socket.emit('messageError', { message: "Failed to save or send message." });
     }
   });
 
-  socket.on('disconnect', (reason) => { // Added reason
+  socket.on('disconnect', (reason) => {
     console.log(`Socket Disconnected: ${socket.id}, Reason: ${reason}`); // DEBUG
     for (const userId in userSockets) {
       if (userSockets[userId] === socket.id) {
@@ -130,9 +137,3 @@ io.on('connection', (socket) => {
   });
 });
 // --- End Socket.IO ---
-
-
-const PORT = process.env.PORT || 8000; // Fixed port to match your running port
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});

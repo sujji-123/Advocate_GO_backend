@@ -14,6 +14,8 @@ const otpSchema = new mongoose.Schema({
       enum: ['client', 'lawyer', 'student', 'advisor'],
       required: true 
     },
+    // Optional specialization saved at OTP time (for lawyers)
+    specialization: { type: String },
     // --- MODIFICATION END ---
 
     consumed: { type: Boolean, default: false },

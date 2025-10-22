@@ -11,6 +11,7 @@ import userRoutes from './routes/users.js';
 import connectionRoutes from './routes/connections.js';
 import proposalRoutes from './routes/proposals.js';
 import chatRoutes from './routes/chat.js';
+import dummyAuthRoutes from './routes/dummy-auth.js'; // ADD THIS LINE
 import Message from './models/Message.js';
 
 dotenv.config();
@@ -52,6 +53,7 @@ mongoose.connect(process.env.MONGO_URL)
 
 // --- API Routes ---
 app.use('/api/auth', authRoutes);
+app.use('/api/dummy-auth', dummyAuthRoutes); // ADD THIS LINE
 app.use('/api/users', userRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/proposals', proposalRoutes);

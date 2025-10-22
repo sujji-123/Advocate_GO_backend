@@ -1,6 +1,7 @@
 // Backend/routes/users.js
 import { Router } from 'express';
 import User from '../models/User.js';
+import DummyUser from '../models/DummyUser.js'; // ADD THIS IMPORT
 import auth from '../middleware/auth.js'; // To protect routes
 
 const router = Router();
@@ -15,9 +16,14 @@ router.get('/', auth, async (req, res) => {
       filter.role = role;
     }
 
-    // Find users, but don't send back their passwords!
-    const users = await User.find(filter).select('-password -passwordResetToken -passwordResetExpires');
-    res.json(users);
+    // MODIFIED: Get users from both collections
+    const regularUsers = await User.find(filter).select('-password -passwordResetToken -passwordResetExpires');
+    const dummyUsers = await DummyUser.find(filter).select('-password -passwordResetToken -passwordResetExpires');
+    
+    // Combine both user lists
+    const allUsers = [...regularUsers, ...dummyUsers];
+    
+    res.json(allUsers);
   } catch (err) {
     console.error('Get Users Error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -27,7 +33,12 @@ router.get('/', auth, async (req, res) => {
 // GET a specific user's public profile
 router.get('/profile/:id', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password -passwordResetToken -passwordResetExpires');
+    // MODIFIED: Check both collections
+    let user = await User.findById(req.params.id).select('-password -passwordResetToken -passwordResetExpires');
+    if (!user) {
+      user = await DummyUser.findById(req.params.id).select('-password -passwordResetToken -passwordResetExpires');
+    }
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }

@@ -57,7 +57,13 @@ router.get('/pending', auth, async (req, res) => {
       status: 'pending'
     }).populate('requester', 'name role specialization profile');
     
-    const formattedRequests = requests.map(req => ({
+    // --- MODIFICATION START ---
+    // Filter out requests where the requester might be null (e.g., user deleted)
+    // This prevents the '.toObject()' error on a null value.
+    const validRequests = requests.filter(req => req.requester);
+    
+    const formattedRequests = validRequests.map(req => ({
+    // --- MODIFICATION END ---
       ...req.toObject(),
       id: req._id.toString(),
       requester: {
@@ -85,6 +91,14 @@ router.get('/accepted', auth, async (req, res) => {
 
     // Format the response to show the other person with proper IDs
     const friends = connections.map(conn => {
+      // --- MODIFICATION START ---
+      // Add a check to ensure both requester and recipient populated successfully.
+      // If either is null (e.g., deleted user), skip this connection.
+      if (!conn.requester || !conn.recipient) {
+        return null;
+      }
+      // --- MODIFICATION END ---
+
       const isRequester = conn.requester._id.toString() === req.userId;
       const otherPerson = isRequester ? conn.recipient : conn.requester;
       
@@ -95,8 +109,13 @@ router.get('/accepted', auth, async (req, res) => {
       };
     });
 
-    console.log(`Found ${friends.length} accepted connections for user ${req.userId}`);
-    res.json(friends);
+    // --- MODIFICATION START ---
+    // Filter out any 'null' entries that resulted from invalid connections
+    const validFriends = friends.filter(friend => friend !== null);
+    // --- MODIFICATION END ---
+
+    console.log(`Found ${validFriends.length} accepted connections for user ${req.userId}`);
+    res.json(validFriends);
   } catch (err) {
     console.error('Get Accepted Connections Error:', err);
     res.status(500).json({ message: 'Server error' });

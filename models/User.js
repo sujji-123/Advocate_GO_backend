@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-// --- Define the arrays first ---
 const lawyerSpecializations = [
   'Criminal Lawyer', 'Civil Lawyer', 'Family Court', 'Corporate/Business Lawyer',
   'Constitutional Lawyer', 'Environmental Lawyer', 'Labour and Employment Lawyer',
@@ -10,7 +9,7 @@ const lawyerSpecializations = [
 ];
 
 const validRoles = ['client', 'lawyer', 'student', 'advisor'];
-// --- End definitions ---
+
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -22,22 +21,21 @@ const userSchema = new mongoose.Schema({
     required: true,
   },
   
-  // Add specialization, only required if the role is 'lawyer'
+
   specialization: {
     type: String,
     enum: lawyerSpecializations,
-    // This 'required' check runs only if the role is 'lawyer'
+  
     required: function() { return this.role === 'lawyer'; },
   },
 
-  // We will manage connections in a separate collection,
-  // but we can add profile details here.
+
   profile: {
     bio: { type: String, default: '' },
     location: { type: String, default: '' },
-    // more fields like education for students, etc. can be added here
+
   },
-  // --- MODIFICATION END ---
+ 
 
   phone: { type: String, unique: true, sparse: true },
   passwordResetToken: String,
@@ -48,6 +46,6 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
-// --- FIX: Export the arrays ---
+
 export { lawyerSpecializations, validRoles };
 export default User;

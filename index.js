@@ -11,7 +11,7 @@ import userRoutes from './routes/users.js';
 import connectionRoutes from './routes/connections.js';
 import proposalRoutes from './routes/proposals.js';
 import chatRoutes from './routes/chat.js';
-import dummyAuthRoutes from './routes/dummy-auth.js'; // ADD THIS LINE
+import dummyAuthRoutes from './routes/dummy-auth.js';
 import Message from './models/Message.js';
 
 dotenv.config();
@@ -35,12 +35,10 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
-// --- FIX 1: Start server *after* successful MongoDB connection ---
 mongoose.connect(process.env.MONGO_URL)
   .then(() => {
     console.log('Connected to MongoDB');
 
-    // Start server only after successful DB connection to avoid buffering timeouts
     const PORT = process.env.PORT || 8000;
     server.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
@@ -51,29 +49,29 @@ mongoose.connect(process.env.MONGO_URL)
     process.exit(1);
   });
 
-// --- API Routes ---
+
 app.use('/api/auth', authRoutes);
-app.use('/api/dummy-auth', dummyAuthRoutes); // ADD THIS LINE
+app.use('/api/dummy-auth', dummyAuthRoutes); 
 app.use('/api/users', userRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/chat', chatRoutes);
 
-// --- Socket.IO Event Handling ---
+
 const userSockets = {};
 
 const getConversationId = (userId1, userId2) => {
-  // Ensure consistent order for conversation ID
+ 
   return [String(userId1), String(userId2)].sort().join('_');
 };
 
 io.on('connection', (socket) => {
-  console.log(`Socket Connected: ${socket.id}`); // DEBUG
+  console.log(`Socket Connected: ${socket.id}`);
 
   socket.on('registerUser', (userId) => {
     if (userId) {
       userSockets[userId] = socket.id;
-      console.log(`User ${userId} registered with socket ${socket.id}`); // DEBUG
+      console.log(`User ${userId} registered with socket ${socket.id}`);
     } else {
       console.warn(`Attempted to register user with invalid ID from socket ${socket.id}`);
     }
@@ -81,26 +79,26 @@ io.on('connection', (socket) => {
 
   socket.on('joinChat', (otherUserId, selfId) => {
     if (!selfId || !otherUserId) {
-      console.warn(`Invalid IDs for joinChat: selfId=${selfId}, otherUserId=${otherUserId}`); // DEBUG
+      console.warn(`Invalid IDs for joinChat: selfId=${selfId}, otherUserId=${otherUserId}`);
       return;
     }
     const conversationId = getConversationId(selfId, otherUserId);
     socket.join(conversationId);
-    console.log(`Socket ${socket.id} (User ${selfId}) joined room: ${conversationId}`); // DEBUG
+    console.log(`Socket ${socket.id} (User ${selfId}) joined room: ${conversationId}`);
   });
 
   socket.on('sendMessage', async (data) => {
-    console.log("Received 'sendMessage' event with data:", data); // DEBUG
+    console.log("Received 'sendMessage' event with data:", data); 
 
     const { senderId, recipientId, content, tempClientOriginId } = data;
     if (!senderId || !recipientId || !content) {
-      console.error("Missing data in sendMessage event:", data); // DEBUG
+      console.error("Missing data in sendMessage event:", data); 
       socket.emit('messageError', { message: "Missing sender, recipient, or content." });
       return;
     }
 
     const conversationId = getConversationId(senderId, recipientId);
-    console.log(`Attempting to save message for conversation: ${conversationId}`); // DEBUG
+    console.log(`Attempting to save message for conversation: ${conversationId}`);
 
     try {
       const newMessage = new Message({
@@ -109,8 +107,8 @@ io.on('connection', (socket) => {
         recipient: recipientId,
         content,
       });
-      const savedMessage = await newMessage.save(); // includes _id, timestamps
-      console.log("Message saved to DB:", savedMessage); // DEBUG
+      const savedMessage = await newMessage.save(); 
+      console.log("Message saved to DB:", savedMessage);
 
       await savedMessage.populate('sender', 'name');
 
@@ -119,23 +117,22 @@ io.on('connection', (socket) => {
         tempClientOriginId: tempClientOriginId || null
       };
 
-      console.log(`Emitting 'receiveMessage' to room ${conversationId} with message:`, messageToSend); // DEBUG
+      console.log(`Emitting 'receiveMessage' to room ${conversationId} with message:`, messageToSend); 
       io.to(conversationId).emit('receiveMessage', messageToSend);
     } catch (error) {
-      console.error("Error saving/sending message:", error); // DEBUG
+      console.error("Error saving/sending message:", error); 
       socket.emit('messageError', { message: "Failed to save or send message." });
     }
   });
 
   socket.on('disconnect', (reason) => {
-    console.log(`Socket Disconnected: ${socket.id}, Reason: ${reason}`); // DEBUG
+    console.log(`Socket Disconnected: ${socket.id}, Reason: ${reason}`); 
     for (const userId in userSockets) {
       if (userSockets[userId] === socket.id) {
         delete userSockets[userId];
-        console.log(`User ${userId} unregistered.`); // DEBUG
+        console.log(`User ${userId} unregistered.`); 
         break;
       }
     }
   });
 });
-// --- End Socket.IO ---
